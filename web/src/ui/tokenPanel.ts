@@ -15,9 +15,11 @@ export class TokenPanel {
 
   render(records: TraceRecord[]): void {
     if (records.length === 0) {
-      this.root.textContent = ''
+      this.root.dataset.empty = 'true'
+      this.root.textContent = 'Token stream appears here after the run starts.'
       return
     }
+    delete this.root.dataset.empty
     this.root.innerHTML = records
       .map((record) => `<div class="token-line">${renderTokenLine(record.generated_tokens)}</div>`)
       .join('')

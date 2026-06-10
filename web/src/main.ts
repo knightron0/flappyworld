@@ -21,6 +21,7 @@ const canvas = document.querySelector<HTMLCanvasElement>('#game-canvas')!
 const tokenPanelShell = document.querySelector<HTMLElement>('#token-panel-shell')!
 const tokenPanelRoot = document.querySelector<HTMLElement>('#token-panel')!
 const tokenRate = document.querySelector<HTMLElement>('#token-rate')!
+const controlsHint = document.querySelector<HTMLElement>('#controls-hint')!
 const tokenToggle = document.querySelector<HTMLButtonElement>('#token-toggle')!
 const aboutToggle = document.querySelector<HTMLButtonElement>('#about-toggle')!
 const aboutDialog = document.querySelector<HTMLDialogElement>('#about-dialog')!
@@ -35,10 +36,10 @@ const worker = new Worker(new URL('./worker/inferenceWorker.ts', import.meta.url
 let latestState: RenderState | null = null
 let traceRecords: TraceRecord[] = []
 let pendingFlap = false
-let paused = false
 let ready = false
 let started = false
 let done = false
+let paused = false
 let inFlight = false
 let dirty = false
 let frameIdx = 0
@@ -52,6 +53,7 @@ let latestTimings: StepTimings | null = null
 let providersLabel = ''
 let tokenStreamVisible = false
 const completedStepTimes: number[] = []
+const desktopMediaQuery = window.matchMedia('(min-width: 641px)')
 
 function targetModelFps(): number {
   return DEFAULT_TARGET_MODEL_FPS
@@ -71,6 +73,56 @@ function post(message: InferenceWorkerMessage): void {
 
 function setStatus(text: string): void {
   statusBar.textContent = text
+}
+
+function isDesktopViewport(): boolean {
+  return desktopMediaQuery.matches
+}
+
+function canvasResetPrompt(): string {
+  return isDesktopViewport() ? 'Press R to reset' : 'Tap to reset'
+}
+
+function startPrompt(targetFps: number, includePlayerVersion?: string): string {
+  const inputLabel = isDesktopViewport() ? 'press Space to start' : 'tap to start'
+  const parts = [inputLabel]
+  if (includePlayerVersion) {
+    parts.push(includePlayerVersion)
+  }
+  parts.push(providersLabel, `target ${targetFps} fps`)
+  return parts.join(' · ')
+}
+
+function donePrompt(targetFps: number): string {
+  const inputLabel = isDesktopViewport() ? 'done - press R to reset' : 'done - tap to reset'
+  return `${inputLabel} · ${providersLabel} · target ${targetFps} fps`
+}
+
+function pausedPrompt(targetFps: number): string {
+  const inputLabel = isDesktopViewport() ? 'paused - press P to resume' : 'paused'
+  return `${inputLabel} · ${providersLabel} · target ${targetFps} fps`
+}
+
+function updateControlsHint(): void {
+  if (isDesktopViewport()) {
+    controlsHint.textContent = done
+      ? 'R to reset · P to pause · Space / click to flap'
+      : 'Space / click to flap · P to pause · R to reset'
+    return
+  }
+  if (!ready) {
+    controlsHint.textContent = 'Loading model...'
+    return
+  }
+  if (done) {
+    controlsHint.textContent = 'Tap or click the game to reset.'
+    return
+  }
+  if (!started) {
+    controlsHint.textContent = 'Tap or click the game to start.'
+    return
+  }
+  controlsHint.textContent = 'Tap or click the game to flap.'
 }
 
 function actualStepFps(now: number): number {
@@ -104,7 +156,7 @@ function renderGame(updatePanel: boolean): number {
     return 0
   }
   const t0 = performance.now()
-  drawFrame(ctx!, latestState, frameIdx, SCALE, SHOW_GUIDES)
+  drawFrame(ctx!, latestState, frameIdx, SCALE, SHOW_GUIDES, canvasResetPrompt())
   if (updatePanel && tokenStreamVisible) {
     tokenPanel.render(traceRecords)
     updateTokenRate()
@@ -136,23 +188,28 @@ function setTokenStreamVisible(visible: boolean): void {
 
 function updateRunStatus(): void {
   if (!ready) {
+    updateControlsHint()
     return
   }
   const targetFps = targetModelFps()
   if (!started) {
-    setStatus(`press Space to start · ${providersLabel} · target ${targetFps} fps`)
+    setStatus(startPrompt(targetFps))
+    updateControlsHint()
     return
   }
   if (done) {
-    setStatus(`done - press R to reset · ${providersLabel} · target ${targetFps} fps`)
+    setStatus(donePrompt(targetFps))
+    updateControlsHint()
     return
   }
   if (paused) {
-    setStatus(`paused · ${providersLabel} · target ${targetFps} fps`)
+    setStatus(pausedPrompt(targetFps))
+    updateControlsHint()
     return
   }
   if (!latestResult) {
     setStatus(`ready · ${providersLabel} · target ${targetFps} fps`)
+    updateControlsHint()
     return
   }
 
@@ -171,6 +228,7 @@ function updateRunStatus(): void {
     status += ' · inference pending'
   }
   setStatus(status)
+  updateControlsHint()
 }
 
 function sendStep(now: number): void {
@@ -186,13 +244,6 @@ function sendStep(now: number): void {
   nextStepAt = now + modelStepIntervalMs()
 }
 
-function sendManualStep(): void {
-  if (!ready || done || inFlight) {
-    return
-  }
-  sendStep(performance.now())
-}
-
 function startGame(): void {
   if (!ready || started || done || inFlight) {
     return
@@ -202,9 +253,31 @@ function startGame(): void {
   dirty = true
 }
 
-function queueFlap(): void {
+function queueFlap(): boolean {
+  if (!ready || !started || done) {
+    return false
+  }
   pendingFlap = true
   setStatus('flap queued')
+  updateControlsHint()
+  return true
+}
+
+function triggerPrimaryAction(event?: Event): void {
+  event?.preventDefault()
+  if (!ready) {
+    return
+  }
+  if (done) {
+    resetGame()
+    return
+  }
+  if (!started) {
+    startGame()
+    updateControlsHint()
+    return
+  }
+  queueFlap()
 }
 
 function resetGame(): void {
@@ -220,25 +293,22 @@ function bindControls(): void {
   window.addEventListener('keydown', (event) => {
     if (event.code === 'Space' || event.code === 'ArrowUp') {
       event.preventDefault()
-      if (!started) {
+      if (done) {
+        resetGame()
+      } else if (!started) {
         startGame()
+      } else {
+        queueFlap()
       }
-      queueFlap()
     } else if (event.key === 'p' || event.key === 'P') {
       paused = !paused
       updateRunStatus()
-    } else if (event.key === 's' || event.key === 'S') {
-      sendManualStep()
     } else if (event.key === 'r' || event.key === 'R') {
       resetGame()
     }
   })
-  canvas.addEventListener('click', () => {
-    if (!started) {
-      return
-    }
-    queueFlap()
-  })
+  canvas.addEventListener('pointerdown', triggerPrimaryAction)
+  desktopMediaQuery.addEventListener('change', updateControlsHint)
   tokenToggle.addEventListener('click', () => {
     setTokenStreamVisible(!tokenStreamVisible)
   })
@@ -286,7 +356,7 @@ function handleWorkerMessage(message: InferenceWorkerResponse): void {
     latestState = message.state
     traceRecords = message.traceRecords
     dirty = true
-    setStatus(`press Space to start · ${message.playerVersion} · ${providersLabel} · target ${targetModelFps()} fps`)
+    setStatus(startPrompt(targetModelFps(), message.playerVersion))
   } else if (message.type === 'stepResult') {
     handleStepResult(message)
   } else if (message.type === 'resetDone') {
@@ -294,6 +364,7 @@ function handleWorkerMessage(message: InferenceWorkerResponse): void {
     pendingFlap = false
     started = false
     done = false
+    paused = false
     frameIdx = 0
     lastTraceCount = 0
     latestResult = null
@@ -302,7 +373,7 @@ function handleWorkerMessage(message: InferenceWorkerResponse): void {
     latestState = message.state
     traceRecords = message.traceRecords
     dirty = true
-    setStatus(`press Space to start · ${providersLabel} · target ${targetModelFps()} fps`)
+    setStatus(startPrompt(targetModelFps()))
   } else {
     inFlight = false
     setStatus(`worker error: ${message.message}`)
@@ -344,6 +415,7 @@ function boot(): void {
   canvas.width = 288 * SCALE
   canvas.height = 512 * SCALE
   setTokenStreamVisible(false)
+  updateControlsHint()
   bindControls()
   showAboutDialog()
   worker.addEventListener('message', (event: MessageEvent<InferenceWorkerResponse>) => {

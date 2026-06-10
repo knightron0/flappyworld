@@ -250,7 +250,7 @@ function drawBird(ctx: CanvasRenderingContext2D, y: number, frameIdx: number): v
   ctx.fill()
 }
 
-function drawDeathTint(ctx: CanvasRenderingContext2D): void {
+function drawDeathTint(ctx: CanvasRenderingContext2D, resetPrompt: string): void {
   ctx.fillStyle = 'rgba(139, 28, 42, 0.28)'
   ctx.fillRect(0, 0, SCREEN_WIDTH, GROUND_Y)
   ctx.fillStyle = 'rgba(255, 250, 240, 0.26)'
@@ -267,8 +267,8 @@ function drawDeathTint(ctx: CanvasRenderingContext2D): void {
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   ctx.font = '12px monospace'
-  ctx.strokeText('Press R to reset', SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 24)
-  ctx.fillText('Press R to reset', SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 24)
+  ctx.strokeText(resetPrompt, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 24)
+  ctx.fillText(resetPrompt, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 24)
   ctx.textAlign = 'start'
   ctx.textBaseline = 'alphabetic'
 }
@@ -279,6 +279,7 @@ export function drawFrame(
   _frameIdx: number,
   scale: number,
   showGuides: boolean,
+  resetPrompt: string,
 ): void {
   const width = SCREEN_WIDTH * scale
   const height = SCREEN_HEIGHT * scale
@@ -295,7 +296,7 @@ export function drawFrame(
   drawBase(ctx, _frameIdx)
   drawBird(ctx, state.bird_y, _frameIdx)
   if (state.reward === 'R_DEAD') {
-    drawDeathTint(ctx)
+    drawDeathTint(ctx, resetPrompt)
   }
   ctx.setTransform(1, 0, 0, 1, 0, 0)
 }
