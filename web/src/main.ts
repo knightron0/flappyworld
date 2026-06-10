@@ -14,7 +14,7 @@ const SCALE = 2
 const SHOW_GUIDES = false
 const DEFAULT_TARGET_MODEL_FPS = 20
 const DEFAULT_PROVIDER: ProviderMode = 'wasm'
-const MODEL_BASE_URL = '/model'
+const MODEL_BASE_URL = `${import.meta.env.BASE_URL}model`
 
 const statusBar = document.querySelector<HTMLElement>('#status-bar')!
 const canvas = document.querySelector<HTMLCanvasElement>('#game-canvas')!

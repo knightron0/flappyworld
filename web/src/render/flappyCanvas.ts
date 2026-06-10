@@ -8,7 +8,7 @@ export const BIRD_WIDTH = 34
 export const BIRD_HEIGHT = 24
 export const BIRD_X = Math.floor(SCREEN_WIDTH * 0.2)
 
-const SPRITE_BASE = '/flappy-assets/sprites'
+const SPRITE_BASE = `${import.meta.env.BASE_URL}flappy-assets/sprites`
 
 type SpriteName =
   | 'backgroundDay'

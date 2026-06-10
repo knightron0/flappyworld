@@ -120,7 +120,7 @@ export class OnnxFlatLMEngine {
     this.vocabSize = manifest.model_config.vocab_size
   }
 
-  async load(modelBaseUrl = '/model', providerMode: ProviderMode = 'auto'): Promise<void> {
+  async load(modelBaseUrl = `${import.meta.env.BASE_URL}model`, providerMode: ProviderMode = 'auto'): Promise<void> {
     configureWasmEnv()
     const cacheKey = encodeURIComponent(this.manifest.model_cache_key ?? `${this.vocabSize}-${this.blockSize}-${this.nLayer}`)
     const prefillUrl = `${modelBaseUrl}/${this.manifest.onnx.prefill}?cache=${cacheKey}`
