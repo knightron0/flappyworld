@@ -222,9 +222,9 @@ body {
 
 #token-panel-shell {
   display: flex;
-  flex: 0 1 fit-content;
+  flex: 0 1 min(56vw, 50rem);
   flex-direction: column;
-  width: fit-content;
+  width: min(56vw, 50rem);
   min-width: 20rem;
   max-width: min(56vw, 50rem);
   min-height: 0;
@@ -261,14 +261,14 @@ body {
 #token-panel {
   flex: 1 1 auto;
   height: auto;
-  width: auto;
+  width: 100%;
   min-width: 0;
   max-width: 100%;
   min-height: 0;
   overflow: auto;
   scrollbar-width: none;
-  padding: 0.45rem 0.55rem;
-  font-size: 0.68rem;
+  padding: 0.45rem 0.9rem 0.45rem 0.55rem;
+  font-size: 0.6rem;
   line-height: 1.25;
   white-space: nowrap;
 }
