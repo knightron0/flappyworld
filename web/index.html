@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Flappy Flat LM Player</title>
+  </head>
+  <body>
+    <div id="app">
+      <header id="status-bar">Loading model...</header>
+      <header id="site-header">
+        <h1 id="page-title">Flappy World</h1>
+        <nav id="site-nav" aria-label="Primary">
+          <button id="about-toggle" class="icon-button" type="button" aria-label="About this demo">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 11v6" />
+              <path d="M12 7.5h.01" />
+            </svg>
+          </button>
+          <a class="icon-link" href="https://github.com/knightron0/flappyworld" aria-label="GitHub">
+            <svg aria-hidden="true" viewBox="0 0 16 16">
+              <path
+                fill="currentColor"
+                d="M8 0C3.58 0 0 3.67 0 8.2c0 3.62 2.29 6.7 5.47 7.79.4.08.55-.18.55-.4l-.01-1.52c-2.23.5-2.7-.97-2.7-.97-.36-.95-.89-1.2-.89-1.2-.73-.51.06-.5.06-.5.81.06 1.23.85 1.23.85.72 1.26 1.88.9 2.34.69.07-.53.28-.9.51-1.1-1.78-.21-3.64-.91-3.64-4.05 0-.9.31-1.63.83-2.2-.08-.21-.36-1.04.08-2.17 0 0 .68-.22 2.21.84A7.49 7.49 0 0 1 8 3.98c.68 0 1.36.09 2 .27 1.53-1.06 2.2-.84 2.2-.84.45 1.13.17 1.96.09 2.17.52.57.83 1.3.83 2.2 0 3.15-1.87 3.84-3.65 4.05.29.25.54.77.54 1.56l-.01 2.2c0 .22.15.48.55.4A8.12 8.12 0 0 0 16 8.2C16 3.67 12.42 0 8 0Z"
+              />
+            </svg>
+          </a>
+          <a href="#">blog</a>
+          <button id="token-toggle" type="button" aria-pressed="false">tokens: off</button>
+        </nav>
+      </header>
+      <main id="layout">
+        <section id="game-panel">
+          <canvas id="game-canvas" width="576" height="1024"></canvas>
+          <p id="controls-hint">Space = start / flap · Click = flap · P = pause · R = reset</p>
+        </section>
+        <aside id="token-panel-shell" hidden>
+          <div id="token-panel-header">
+            <span>TOKEN STREAM</span>
+            <span id="token-rate">0 tok/s</span>
+          </div>
+          <div id="token-panel"></div>
+        </aside>
+      </main>
+      <dialog id="about-dialog" aria-labelledby="about-title">
+        <form method="dialog" id="about-card">
+          <div id="about-header">
+            <h2 id="about-title">What You Are Seeing</h2>
+            <button id="about-close" type="submit" value="close" aria-label="Close">x</button>
+          </div>
+          <div id="about-body">
+            <p>
+              This is Flappy Bird generated one frame at a time by a small language model running in your browser.
+            </p>
+            <p>
+              Each frame is tokenized into bird position, pipe position, pipe gap, player action, respawn, and done. On every tick, the model predicts the next frame from the current one. The canvas simply draws whatever state the model predicts.
+            </p>
+          
+            <p>
+              There is no explicit game physics or hand-written game logic anywhere. The world model has learned the dynamics from data. Toggle the token stream to see those predictions as you play!
+            </p>
+          </div>
+          <button id="about-start" type="submit" value="start">start</button>
+        </form>
+      </dialog>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
