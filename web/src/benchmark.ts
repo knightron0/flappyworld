@@ -6,10 +6,12 @@ type Backend = 'webgpu' | 'wasm'
 type Point = { x: number; y: number }
 
 const DECODE_TOKENS = [1, 4, 8, 16]
+const webgpuAvailable = typeof navigator !== 'undefined' && 'gpu' in navigator
 
 const rerollButton = document.querySelector<HTMLButtonElement>('#reroll-button')!
 const backendModeSelect = document.querySelector<HTMLSelectElement>('#backend-mode-select')!
 const cacheBackendSelect = document.querySelector<HTMLSelectElement>('#cache-backend-select')!
+const webgpuStatus = document.querySelector<HTMLParagraphElement>('#webgpu-status')!
 const aboutToggle = document.querySelector<HTMLButtonElement>('#about-toggle')!
 const aboutDialog = document.querySelector<HTMLDialogElement>('#about-dialog')!
 
@@ -25,6 +27,14 @@ type ScenarioKey = `${Backend}:${CacheMode}:${number}`
 const scenarioCache = new Map<ScenarioKey, { totalMs: number; throughput: number }>()
 let running = false
 const DEFAULT_BUTTON_LABEL = 're-run'
+
+if (!webgpuAvailable) {
+  const webgpuOption = cacheBackendSelect.querySelector<HTMLOptionElement>('option[value="webgpu"]')
+  webgpuOption?.remove()
+  cacheBackendSelect.value = 'wasm'
+  webgpuStatus.textContent = 'WebGPU is not available in this browser. Showing WASM-only benchmarks.'
+  webgpuStatus.hidden = false
+}
 
 function setStatus(text: string): void {
   rerollButton.textContent = text
@@ -249,16 +259,18 @@ async function render(): Promise<void> {
   const backendMode = backendModeSelect.value as CacheMode
   const cacheBackend = cacheBackendSelect.value as Backend
 
-  const webgpuLine = await collectLine('webgpu', backendMode)
   const wasmLine = await collectLine('wasm', backendMode)
-  renderLineChart(charts.backendLatency, [
-    { label: 'webgpu', color: '#2f7ed8', points: webgpuLine.latency },
-    { label: 'wasm', color: '#111', points: wasmLine.latency },
-  ], 'ms')
-  renderLineChart(charts.backendThroughput, [
-    { label: 'webgpu', color: '#2f7ed8', points: webgpuLine.throughput },
-    { label: 'wasm', color: '#111', points: wasmLine.throughput },
-  ], 'tok/s')
+  const backendLines = [{ label: 'wasm', color: '#111', points: wasmLine.latency }]
+  const backendThroughputLines = [{ label: 'wasm', color: '#111', points: wasmLine.throughput }]
+
+  if (webgpuAvailable) {
+    const webgpuLine = await collectLine('webgpu', backendMode)
+    backendLines.unshift({ label: 'webgpu', color: '#2f7ed8', points: webgpuLine.latency })
+    backendThroughputLines.unshift({ label: 'webgpu', color: '#2f7ed8', points: webgpuLine.throughput })
+  }
+
+  renderLineChart(charts.backendLatency, backendLines, 'ms')
+  renderLineChart(charts.backendThroughput, backendThroughputLines, 'tok/s')
 
   const reuseLine = await collectLine(cacheBackend, 'reuse')
   const recomputeLine = await collectLine(cacheBackend, 'recompute')
