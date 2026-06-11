@@ -58,28 +58,6 @@ export class KVCache {
   }
 }
 
-function idsEqual(left: number[], right: number[]): boolean {
-  if (left.length !== right.length) {
-    return false
-  }
-  for (let i = 0; i < left.length; i += 1) {
-    if (left[i] !== right[i]) {
-      return false
-    }
-  }
-  return true
-}
-
-function findFirstDivergence(left: number[], right: number[]): number {
-  const limit = Math.min(left.length, right.length)
-  for (let i = 0; i < limit; i += 1) {
-    if (left[i] !== right[i]) {
-      return i
-    }
-  }
-  return limit
-}
-
 class TensorScratch {
   int64BatchTensor(ids: number[]): ort.Tensor {
     const data = new BigInt64Array(ids.length)
@@ -175,9 +153,17 @@ export class OnnxFlatLMEngine {
     return { ...this.stepTimings }
   }
 
+  markCacheReused(): void {
+    this.stepTimings.cacheReused = true
+  }
+
   resetCache(): void {
     this.cache = null
     this.lastLogits = null
+  }
+
+  get currentLogits(): Float32Array | null {
+    return this.lastLogits
   }
 
   private setLastLogits(logits: Float32Array): Float32Array {
@@ -227,72 +213,6 @@ export class OnnxFlatLMEngine {
       this.stepTimings.syncDecodeCalls += 1
     }
     return this.setLastLogits(OnnxFlatLMEngine.logitsAtLast(outputs.logits as ort.Tensor))
-  }
-
-  /**
-   * Reuse KV cache across game ticks instead of prefilling the full context every step.
-   */
-  async syncContext(
-    checkpointIds: number[] | null,
-    targetIds: number[],
-    targetPositions: number[],
-  ): Promise<Float32Array> {
-    if (!this.cache || checkpointIds === null || checkpointIds.length === 0) {
-      return this.prefill(targetIds, targetPositions)
-    }
-
-    this.stepTimings.cacheReused = true
-    let cache = this.cache
-    let alignedCheckpoint = checkpointIds
-
-    if (cache.seqLen < alignedCheckpoint.length) {
-      alignedCheckpoint = alignedCheckpoint.slice(-cache.seqLen)
-    }
-
-    if (cache.seqLen > targetIds.length) {
-      const drop = cache.seqLen - targetIds.length
-      const suffix = alignedCheckpoint.slice(drop)
-      if (idsEqual(suffix, targetIds)) {
-        cache = cache.truncateLeft(drop)
-        this.cache = cache
-        alignedCheckpoint = suffix
-      } else {
-        this.stepTimings.cacheReused = false
-        return this.prefill(targetIds, targetPositions)
-      }
-    }
-
-    const targetOffset = Math.max(0, targetIds.length - alignedCheckpoint.length)
-    if (targetOffset > 0) {
-      this.stepTimings.cacheReused = false
-      return this.prefill(targetIds, targetPositions)
-    }
-
-    const diverge = findFirstDivergence(alignedCheckpoint, targetIds)
-    if (diverge === targetIds.length && cache.seqLen === targetIds.length) {
-      if (this.lastLogits) {
-        return this.lastLogits
-      }
-    }
-
-    const truncateDrop = cache.seqLen - diverge
-    if (truncateDrop > 0) {
-      this.cache = cache.truncateLeft(truncateDrop)
-    }
-
-    if (diverge === 0 || this.cache === null || this.cache.seqLen === 0) {
-      this.stepTimings.cacheReused = false
-      return this.prefill(targetIds, targetPositions)
-    }
-
-    let logits: Float32Array | null = null
-    for (let i = diverge; i < targetIds.length; i += 1) {
-      logits = await this.step(targetIds[i], targetPositions[i], true)
-    }
-    if (!logits) {
-      throw new Error('syncContext produced no logits')
-    }
-    return logits
   }
 
   static logitsAtLast(logits: ort.Tensor): Float32Array {
