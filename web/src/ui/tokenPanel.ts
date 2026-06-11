@@ -67,7 +67,8 @@ function renderGroup(group: TokenGroup): string {
 }
 
 function renderToken(token: string): string {
-  const escaped = escapeHtml(token)
+  const label = formatTokenLabel(token)
+  const escaped = escapeHtml(label)
   if (token === 'action_1') {
     return `<span class="token-action-flap">${escaped}</span>`
   }
@@ -75,6 +76,52 @@ function renderToken(token: string): string {
     return `<span class="token-done">${escaped}</span>`
   }
   return escaped
+}
+
+function formatTokenLabel(token: string): string {
+  if (token === 'action_1') {
+    return 'FLAP'
+  }
+  if (token === 'action_0') {
+    return 'IDLE'
+  }
+  if (token === 'respawn_1') {
+    return 'RESPAWN'
+  }
+  if (token === 'respawn_0') {
+    return 'NO_RESPAWN'
+  }
+  if (token === 'done_1') {
+    return 'DONE'
+  }
+  if (token === 'done_0') {
+    return 'ALIVE'
+  }
+  if (token === 'pipe0_present_1') {
+    return 'P0_VISIBLE'
+  }
+  if (token === 'pipe0_present_0') {
+    return 'P0_HIDDEN'
+  }
+  if (token === 'pipe1_present_1') {
+    return 'P1_VISIBLE'
+  }
+  if (token === 'pipe1_present_0') {
+    return 'P1_HIDDEN'
+  }
+  if (token === 'pipe0_x_hidden') {
+    return 'P0_X_HIDDEN'
+  }
+  if (token === 'pipe0_gap_hidden') {
+    return 'P0_GAP_HIDDEN'
+  }
+  if (token === 'pipe1_x_hidden') {
+    return 'P1_X_HIDDEN'
+  }
+  if (token === 'pipe1_gap_hidden') {
+    return 'P1_GAP_HIDDEN'
+  }
+  return token.toUpperCase().replace('PIPE0_', 'P0_').replace('PIPE1_', 'P1_')
 }
 
 function escapeHtml(value: string): string {

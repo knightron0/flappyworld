@@ -1,4 +1,4 @@
-"""Interactively play the typed tokenized AR Flappy world model.
+"""Interactively play the autoregressive Flappy world model.
 
 Controls:
   Space / Up / mouse click: queue a flap for the next model step

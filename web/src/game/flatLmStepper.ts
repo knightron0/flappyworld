@@ -14,6 +14,14 @@ function parseValueToken(token: string): number {
   return Number.parseInt(token.split('_').at(-1) ?? '0', 10)
 }
 
+function parseNumericToken(token: string, prefix: string): number | null {
+  if (!token.startsWith(prefix)) {
+    return null
+  }
+  const value = parseValueToken(token)
+  return Number.isFinite(value) ? value : null
+}
+
 function sampleFromLogits(logits: Float32Array): number {
   let bestId = 0
   let bestLogit = Number.NEGATIVE_INFINITY
@@ -63,10 +71,11 @@ export class FlatLMStepper {
   }
 
   reset(): void {
+    if (!this.initialPresent) {
+      throw new Error('manifest default_seed.pipe_present is required for flat LM playback')
+    }
     this.frames = this.initialFrames.map((frame) => ({ ...frame }))
-    this.pipePresent = this.initialPresent
-      ? this.initialPresent.map((item) => [...item] as [boolean, boolean])
-      : this.frames.map((frame) => this.inferPresent(frame))
+    this.pipePresent = this.initialPresent.map((item) => [...item] as [boolean, boolean])
     this.done = false
     this.lastAction = null
     this.lastRespawn = false
@@ -74,10 +83,6 @@ export class FlatLMStepper {
     this.lastTimings = null
     this.engine.resetCache()
     this.rebuildContextState()
-  }
-
-  private get respawnThresholdBins(): number {
-    return this.tokenizerConfig.respawn_threshold_bins
   }
 
   private contextTokens(includeLastAction: boolean): { ids: number[]; positions: number[]; nextPosition: number } {
@@ -108,11 +113,6 @@ export class FlatLMStepper {
     this.contextIds = ids
     this.contextPositions = positions
     this.nextPosition = nextPosition
-  }
-
-  inferPresent(frame: FrameTokens): [boolean, boolean] {
-    const visible = (x: number) => x > 0 && x < this.tokenizerConfig.pipe_x_bins - 1
-    return [visible(frame.pipe0_x), visible(frame.pipe1_x)]
   }
 
   frameTokensForContext(frame: FrameTokens, present: [boolean, boolean], includeAction = true): string[] {
@@ -173,6 +173,23 @@ export class FlatLMStepper {
     return this.forwardToken(tokenId, position)
   }
 
+  private renderPipeValues(pipeIdx: 0 | 1, xToken: string, gapToken: string): {
+    x: number
+    gap: number
+    present: boolean
+  } {
+    const x = parseNumericToken(xToken, `pipe${pipeIdx}_x_`)
+    const gap = parseNumericToken(gapToken, `pipe${pipeIdx}_gap_`)
+    if (x === null || gap === null) {
+      return {
+        x: this.tokenizerConfig.pipe_x_bins - 1,
+        gap: 0,
+        present: false,
+      }
+    }
+    return { x, gap, present: true }
+  }
+
   private async sampleToken(
     logits: Float32Array,
   ): Promise<[string, Float32Array]> {
@@ -197,88 +214,54 @@ export class FlatLMStepper {
     const actionLabel = flap ? 'A_FLAP' : 'A_IDLE'
     let logits = await this.ensureContextPrefilled()
     this.frames[this.frames.length - 1].action = action
-    const prevPresent = this.pipePresent[this.pipePresent.length - 1]
     const generatedTokens: string[] = []
     generatedTokens.push(`action_${action}`)
-    logits = await this.appendToken(`action_${action}`)
+    logits = await this.appendToken(`action_${action}`) // one decode
 
     const [birdYToken, birdLogits] = await this.sampleToken(logits)
-    const birdY = parseValueToken(birdYToken)
+    const birdY = parseNumericToken(birdYToken, 'bird_y_') ?? 0
     generatedTokens.push(birdYToken)
     logits = birdLogits
 
     const [pipe0PresentToken, pipe0PresentLogits] = await this.sampleToken(logits)
     generatedTokens.push(pipe0PresentToken)
-    const pipe0Present = parseValueToken(pipe0PresentToken) === 1
     logits = pipe0PresentLogits
 
-    let pipe0X: number
-    let pipe0Gap: number
-    let pipe0Respawn: boolean
-    if (pipe0Present) {
-      const [pipe0XToken, pipe0XLogits] = await this.sampleToken(logits)
-      pipe0X = parseValueToken(pipe0XToken)
-      generatedTokens.push(pipe0XToken)
-      pipe0Respawn =
-        !prevPresent[0] ||
-        pipe0X - this.frames[this.frames.length - 1].pipe0_x >= this.respawnThresholdBins
-      const [pipe0GapToken, pipe0GapLogits] = await this.sampleToken(pipe0XLogits)
-      pipe0Gap = parseValueToken(pipe0GapToken)
-      generatedTokens.push(pipe0GapToken)
-      logits = pipe0GapLogits
-    } else {
-      pipe0X = this.tokenizerConfig.pipe_x_bins - 1
-      pipe0Gap = this.frames[this.frames.length - 1].pipe0_gap
-      pipe0Respawn = false
-      logits = await this.appendToken('pipe0_x_hidden')
-      logits = await this.appendToken('pipe0_gap_hidden')
-      generatedTokens.push('pipe0_x_hidden', 'pipe0_gap_hidden')
-    }
+    const [pipe0XToken, pipe0XLogits] = await this.sampleToken(logits)
+    generatedTokens.push(pipe0XToken)
+    const [pipe0GapToken, pipe0GapLogits] = await this.sampleToken(pipe0XLogits)
+    generatedTokens.push(pipe0GapToken)
+    const pipe0 = this.renderPipeValues(0, pipe0XToken, pipe0GapToken)
+    logits = pipe0GapLogits
 
-    let pipe1X: number
-    let pipe1Gap: number
-    let pipe1Respawn = false
     const [pipe1PresentToken, pipe1PresentLogits] = await this.sampleToken(logits)
     generatedTokens.push(pipe1PresentToken)
-    const pipe1Present = parseValueToken(pipe1PresentToken) === 1
     logits = pipe1PresentLogits
-    if (pipe1Present) {
-      const [pipe1XToken, pipe1XLogits] = await this.sampleToken(logits)
-      pipe1X = parseValueToken(pipe1XToken)
-      generatedTokens.push(pipe1XToken)
-      pipe1Respawn =
-        !prevPresent[1] ||
-        pipe1X - this.frames[this.frames.length - 1].pipe1_x >= this.respawnThresholdBins
-      const [pipe1GapToken, pipe1GapLogits] = await this.sampleToken(pipe1XLogits)
-      pipe1Gap = parseValueToken(pipe1GapToken)
-      generatedTokens.push(pipe1GapToken)
-      logits = pipe1GapLogits
-    } else {
-      pipe1X = this.tokenizerConfig.pipe_x_bins - 1
-      pipe1Gap = this.frames[this.frames.length - 1].pipe1_gap
-      pipe1Respawn = false
-      logits = await this.appendToken('pipe1_x_hidden')
-      logits = await this.appendToken('pipe1_gap_hidden')
-      generatedTokens.push('pipe1_x_hidden', 'pipe1_gap_hidden')
-    }
+
+    const [pipe1XToken, pipe1XLogits] = await this.sampleToken(logits)
+    generatedTokens.push(pipe1XToken)
+    const [pipe1GapToken, pipe1GapLogits] = await this.sampleToken(pipe1XLogits)
+    generatedTokens.push(pipe1GapToken)
+    const pipe1 = this.renderPipeValues(1, pipe1XToken, pipe1GapToken)
+    logits = pipe1GapLogits
 
     const [respawnToken, respawnLogits] = await this.sampleToken(logits)
     const [doneToken] = await this.sampleToken(respawnLogits)
     generatedTokens.push(respawnToken, doneToken)
 
-    this.done = parseValueToken(doneToken) === 1
-    const respawn = pipe0Respawn || pipe1Respawn || parseValueToken(respawnToken) === 1
+    this.done = doneToken === 'done_1'
+    const respawn = respawnToken === 'respawn_1'
     this.frames.push({
       bird_y: birdY,
-      pipe0_x: pipe0X,
-      pipe0_gap: pipe0Gap,
-      pipe1_x: pipe1X,
-      pipe1_gap: pipe1Gap,
+      pipe0_x: pipe0.x,
+      pipe0_gap: pipe0.gap,
+      pipe1_x: pipe1.x,
+      pipe1_gap: pipe1.gap,
       respawn: respawn ? 1 : 0,
       done: this.done ? 1 : 0,
       action: 0,
     })
-    this.pipePresent.push([pipe0Present, pipe1Present])
+    this.pipePresent.push([pipe0.present, pipe1.present])
     this.lastAction = actionLabel
     this.lastRespawn = respawn
     const inference = this.engine.getStepTimings()
@@ -294,15 +277,15 @@ export class FlatLMStepper {
       input_action: action,
       generated_tokens: generatedTokens,
       pipe_present: {
-        pipe0: pipe0Present,
-        pipe1: pipe1Present,
+        pipe0: pipe0.present,
+        pipe1: pipe1.present,
       },
       frame: {
         bird_y: birdY,
-        pipe0_x: pipe0X,
-        pipe0_gap: pipe0Gap,
-        pipe1_x: pipe1X,
-        pipe1_gap: pipe1Gap,
+        pipe0_x: pipe0.x,
+        pipe0_gap: pipe0.gap,
+        pipe1_x: pipe1.x,
+        pipe1_gap: pipe1.gap,
         respawn: respawn ? 1 : 0,
         done: this.done ? 1 : 0,
         action,

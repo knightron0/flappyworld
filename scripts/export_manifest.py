@@ -12,9 +12,49 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from scripts.play import visible_seed_frames_from_data
 from model.player_base import seed_frames_from_data
-from model.data import TokenizerConfig
+from model.data import FrameTokens, TokenizerConfig
+
+
+def visible_seed_frames_from_data(
+    path: Path,
+    line: int,
+    state_index: int,
+    history_size: int,
+    tokenizer_config: TokenizerConfig,
+) -> tuple[list[FrameTokens], list[tuple[bool, bool]]] | None:
+    with path.open("r", encoding="utf-8") as f:
+        for idx, raw in enumerate(f):
+            if idx != line:
+                continue
+            record = json.loads(raw)
+            if record.get("format") != "visible_pipe_flat_lm_v1" or "visible_pipe_frames" not in record:
+                return None
+            frames = record["visible_pipe_frames"]
+            if state_index >= len(frames):
+                raise IndexError(f"--seed-state-index {state_index} out of range; episode has {len(frames)} visible frames")
+            start = max(0, state_index - history_size + 1)
+            out_frames: list[FrameTokens] = []
+            out_present: list[tuple[bool, bool]] = []
+            for frame in frames[start : state_index + 1]:
+                p0, p1 = frame["pipes"]
+                p0_present = bool(p0["present"])
+                p1_present = bool(p1["present"])
+                out_frames.append(
+                    FrameTokens(
+                        bird_y=int(frame["bird_y"]),
+                        pipe0_x=int(p0["x"]) if p0_present else tokenizer_config.pipe_x_bins - 1,
+                        pipe0_gap=int(p0["gap"]) if p0_present else 0,
+                        pipe1_x=int(p1["x"]) if p1_present else tokenizer_config.pipe_x_bins - 1,
+                        pipe1_gap=int(p1["gap"]) if p1_present else 0,
+                        respawn=int(frame["respawn"]),
+                        done=int(frame["done"]),
+                        action=int(frame["action"]),
+                    )
+                )
+                out_present.append((p0_present, p1_present))
+            return out_frames, out_present
+    raise IndexError(f"{path} has no line {line}")
 
 
 def load_default_seed(

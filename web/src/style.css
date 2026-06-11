@@ -285,8 +285,8 @@ body {
   overflow: auto;
   scrollbar-width: none;
   padding: 0.45rem 0.9rem 0.45rem 0.55rem;
-  font-size: 0.6rem;
-  line-height: 1.25;
+  font-size: 0.78rem;
+  line-height: 1.35;
   white-space: nowrap;
 }
 
@@ -306,7 +306,7 @@ body {
 
 .token-line {
   min-width: max-content;
-  padding: 0.08rem 0;
+  padding: 0.12rem 0;
 }
 
 .token-group {

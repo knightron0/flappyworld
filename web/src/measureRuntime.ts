@@ -70,9 +70,12 @@ function buildSeedContext(manifest: Manifest): { ids: number[]; positions: numbe
   if (!seed) {
     throw new Error('manifest missing default_seed')
   }
+  if (!seed.pipe_present) {
+    throw new Error('manifest default_seed.pipe_present is required for benchmark context')
+  }
   const tokens = ['<bos>']
   for (let i = 0; i < seed.frames.length; i += 1) {
-    const present = seed.pipe_present?.[i] ?? [true, true]
+    const present = seed.pipe_present[i]
     tokens.push(...frameTokens(seed.frames[i], present, i < seed.frames.length - 1))
   }
   const ids = tokens.map((token) => {
@@ -128,8 +131,6 @@ export async function measureProvider(
   let totalDecodeMs = 0
   let prefillTotalMs = 0
 
-  const forcedTokens = ['action_0']
-
   if (mode === 'reuse') {
     const t0 = performance.now()
     logits = await engine.prefill(ids, positions)
@@ -144,15 +145,8 @@ export async function measureProvider(
       logits = await engine.prefill(ids, positions)
       prefillTotalMs += performance.now() - t0
     }
-    let tokenId: number
-    let token: string
-    if (step < forcedTokens.length) {
-      token = forcedTokens[step]
-      tokenId = manifest.vocab[token]
-    } else {
-      tokenId = sampleFromLogits(logits)
-      token = manifest.id_to_token[String(tokenId)] ?? `id_${tokenId}`
-    }
+    const tokenId = sampleFromLogits(logits)
+    const token = manifest.id_to_token[String(tokenId)] ?? `id_${tokenId}`
     const stepStart = performance.now()
     logits = await engine.step(tokenId, nextPosition)
     const ms = performance.now() - stepStart
