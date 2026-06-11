@@ -199,6 +199,7 @@ export class FlatLMStepper {
     this.frames[this.frames.length - 1].action = action
     const prevPresent = this.pipePresent[this.pipePresent.length - 1]
     const generatedTokens: string[] = []
+    generatedTokens.push(`action_${action}`)
     logits = await this.appendToken(`action_${action}`)
 
     const [birdYToken, birdLogits] = await this.sampleToken(logits)
