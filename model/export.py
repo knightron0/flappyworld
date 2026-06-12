@@ -32,7 +32,7 @@ from typing import Any
 import torch
 import torch.nn as nn
 
-from model.data import TokenizerConfig
+from model.shared import TokenizerConfig
 from model.core import FlatFrameLM, ModelConfig
 
 

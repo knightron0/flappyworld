@@ -14,7 +14,7 @@ from model.player_base import (
     seed_frames_from_data,
 )
 from model.export import FlatLMInferenceEngine, KVCache
-from model.data import FrameTokens, ModelConfig as TypedModelConfig, TokenizerConfig
+from model.shared import FrameTokens, TokenizerConfig
 from model.core import FlatFrameLM, ModelConfig
 from model.render import SCREEN_HEIGHT, SCREEN_WIDTH
 
@@ -56,7 +56,7 @@ def load_checkpoint(path: Path, device: Any) -> tuple[FlatFrameLM, TokenizerConf
     if position_scheme != "global_rope" and "global_rope" not in transition:
         raise SystemExit(
             "Checkpoint uses legacy local position embeddings. Retrain with the updated "
-            "scripts.train_model (global RoPE) before playing with KV cache."
+            "scripts.train_model.py (global RoPE) before playing with KV cache."
         )
     tokenizer_config = TokenizerConfig(**ckpt["tokenizer_config"])
     print(f"building_model={model_config} position_scheme={position_scheme}", flush=True)
@@ -136,21 +136,6 @@ class FlatLMStepper:
         self.initial_frames = [FrameTokens(**frame.__dict__) for frame in seed_frames]
         self.initial_present = list(seed_present) if seed_present is not None else None
         self.reset()
-
-    @property
-    def typed_config(self) -> TypedModelConfig:
-        # Rendering only needs bin counts and respawn threshold.
-        return TypedModelConfig(
-            history_size=0,
-            bird_y_bins=self.tokenizer_config.bird_y_bins,
-            pipe_x_bins=self.tokenizer_config.pipe_x_bins,
-            pipe_gap_bins=self.tokenizer_config.pipe_gap_bins,
-            respawn_threshold_bins=self.tokenizer_config.respawn_threshold_bins,
-            n_layer=0,
-            n_head=0,
-            n_embd=0,
-            dropout=0.0,
-        )
 
     def reset(self) -> None:
         self.frames = [FrameTokens(**frame.__dict__) for frame in self.initial_frames]
@@ -256,7 +241,7 @@ class FlatLMStepper:
             pipe0_x_token, logits = self.sample_token(ids, positions, logits)
             pipe0_x = parse_value_token(pipe0_x_token)
             generated_tokens.append(pipe0_x_token)
-            pipe0_respawn = not prev_present[0] or (pipe0_x - self.frames[-1].pipe0_x) >= self.typed_config.respawn_threshold_bins
+            pipe0_respawn = not prev_present[0] or (pipe0_x - self.frames[-1].pipe0_x) >= self.tokenizer_config.respawn_threshold_bins
             pipe0_gap_token, logits = self.sample_token(ids, positions, logits)
             pipe0_gap = parse_value_token(pipe0_gap_token)
             generated_tokens.append(pipe0_gap_token)
@@ -275,7 +260,7 @@ class FlatLMStepper:
             pipe1_x_token, logits = self.sample_token(ids, positions, logits)
             pipe1_x = parse_value_token(pipe1_x_token)
             generated_tokens.append(pipe1_x_token)
-            pipe1_respawn = not prev_present[1] or (pipe1_x - self.frames[-1].pipe1_x) >= self.typed_config.respawn_threshold_bins
+            pipe1_respawn = not prev_present[1] or (pipe1_x - self.frames[-1].pipe1_x) >= self.tokenizer_config.respawn_threshold_bins
             pipe1_gap_token, logits = self.sample_token(ids, positions, logits)
             pipe1_gap = parse_value_token(pipe1_gap_token)
             generated_tokens.append(pipe1_gap_token)
@@ -335,7 +320,7 @@ class FlatLMStepper:
     def latest_state(self, pipe_gap_px: int) -> dict[str, int | str]:
         current = self.frames[-1]
         prev = self.frames[-2] if len(self.frames) > 1 else current
-        state = frame_to_render_state(current, prev, self.typed_config, pipe_gap_px, self.last_action, self.done)
+        state = frame_to_render_state(current, prev, self.tokenizer_config, pipe_gap_px, self.last_action, self.done)
         present = self.pipe_present[-1]
         if not present[1]:
             state["p1_x"] = SCREEN_WIDTH

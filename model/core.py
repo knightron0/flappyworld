@@ -1,12 +1,11 @@
 """Train a flat language model over compact tokenized Flappy frames.
 
-This keeps the same state abstraction as ``model/data.py`` but
-serializes frames into a single next-token stream:
+This serializes frames into a single next-token stream:
 
     bird_y_... pipe0_x_... pipe0_gap_... pipe1_x_... pipe1_gap_...
             respawn_... done_... action_...
 
-Unlike the typed-head model, every prediction comes from one vocabulary softmax.
+Every prediction comes from one vocabulary softmax.
 """
 
 from __future__ import annotations
@@ -27,7 +26,7 @@ from torch.utils.data import DataLoader, Dataset
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from model.data import FrameTokens, TokenizerConfig, load_episodes
+from model.shared import FrameTokens, TokenizerConfig, load_episodes
 
 
 CacheOutput = Literal["full", "delta"]

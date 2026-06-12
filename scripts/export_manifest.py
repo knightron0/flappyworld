@@ -13,7 +13,7 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from model.player_base import seed_frames_from_data
-from model.data import FrameTokens, TokenizerConfig
+from model.shared import FrameTokens, TokenizerConfig
 
 
 def visible_seed_frames_from_data(
